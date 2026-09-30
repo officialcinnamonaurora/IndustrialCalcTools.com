@@ -1,0 +1,6 @@
+{
+  "name": "IndustrialCalcTools",
+  "description": "Free industrial calculators for manufacturing plant insurance, forklift and warehouse coverage, OSHA fines, EPA compliance, equipment costs, and certifications.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
