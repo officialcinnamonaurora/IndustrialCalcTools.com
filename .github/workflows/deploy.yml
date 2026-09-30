@@ -1,0 +1,77 @@
+name: Build and deploy IndustrialCalcTools
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build website
+        run: npm run build -- --base=/
+      - name: Prepare domain and direct page URLs
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          const html = fs.readFileSync('dist/index.html', 'utf8');
+          const routes = new Set();
+          function walk(dir) {
+            for (const entry of fs.readdirSync(dir, {withFileTypes: true})) {
+              const file = path.join(dir, entry.name);
+              if (entry.isDirectory()) walk(file);
+              else if (/\.tsx?$/.test(file)) {
+                const source = fs.readFileSync(file, 'utf8');
+                for (const match of source.matchAll(/\bpath\s*:\s*['"](\/[^'"\s]*)['"]/g)) routes.add(match[1]);
+              }
+            }
+          }
+          walk('src/data');
+          for (const route of routes) {
+            const parts = route.split('/').filter(Boolean);
+            if (!parts.length || parts.some(p => p === '.' || p === '..')) continue;
+            const destination = path.join('dist', ...parts);
+            fs.mkdirSync(destination, {recursive: true});
+            fs.writeFileSync(path.join(destination, 'index.html'), html);
+          }
+          fs.writeFileSync('dist/404.html', html);
+          fs.writeFileSync('dist/CNAME', 'industrialcalctools.com\n');
+          fs.writeFileSync('dist/.nojekyll', '');
+          console.log(`Prepared ${routes.size} direct page URLs.`);
+          NODE
+      - name: Upload website
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
